@@ -1,0 +1,188 @@
+name: DataClean-Env
+version: "1.0.0"
+description: >
+  An OpenEnv-compliant reinforcement learning environment for data cleaning agents.
+  Tests null imputation, dtype correction, outlier clipping, deduplication,
+  provenance tracking, and confidence calibration across three real-world datasets.
+
+author: Jithendra Gudidha
+tags:
+  - openenv
+  - data-cleaning
+  - tabular
+  - rl-environment
+  - pandas
+  - provenance
+
+# HuggingFace Spaces endpoint
+url: https://huggingface.co/spaces/jithendra/dataclean-env
+
+# All 6 required OpenEnv endpoints
+endpoints:
+  reset:
+    method: POST
+    path: /reset
+    description: Start a new episode. Returns observation + episode_id.
+    request_schema:
+      task_id:
+        type: string
+        enum: [task_1, task_2, task_3]
+        default: task_1
+      seed:
+        type: integer
+        default: 42
+    response_schema:
+      episode_id: string
+      observation: object
+
+  step:
+    method: POST
+    path: /step
+    description: Apply one DataCleanAction. Returns obs, reward, done, info.
+    request_schema:
+      episode_id: string
+      action:
+        action_type:
+          type: string
+          enum: [fill_nulls, remove_duplicates, fix_dtype, clip_outliers, rename_column, drop_column, done]
+        column:
+          type: string
+          nullable: true
+        params:
+          type: object
+        confidence:
+          type: float
+          minimum: 0.0
+          maximum: 1.0
+    response_schema:
+      observation: object
+      reward: float
+      done: boolean
+      info: object
+      reward_breakdown: object
+
+  state:
+    method: GET
+    path: /state
+    description: Current EpisodeState — step count, total reward, ops log, done flag.
+    query_params:
+      episode_id: string
+    response_schema:
+      task_id: string
+      episode_id: string
+      step: integer
+      max_steps: integer
+      total_reward: float
+      done: boolean
+      ops_log: array
+
+  tasks:
+    method: GET
+    path: /tasks
+    description: All available tasks plus the complete action schema.
+    response_schema:
+      tasks: array
+      action_schema: object
+      reward_info: object
+
+  grader:
+    method: POST
+    path: /grader
+    description: Score the current dataframe state. Returns 0.0–1.0.
+    request_schema:
+      episode_id: string
+    response_schema:
+      score:
+        type: float
+        minimum: 0.0
+        maximum: 1.0
+      quality_scores: object
+      provenance_reproducible: boolean
+      ops_log_length: integer
+
+  baseline:
+    method: GET
+    path: /baseline
+    description: Run heuristic agent on all 3 tasks. Returns scores dict.
+    query_params:
+      seed:
+        type: integer
+        default: 42
+    response_schema:
+      agent: string
+      seed: integer
+      results: object
+
+# Tasks
+tasks:
+  - id: task_1
+    name: Employee Dataset Cleaning
+    difficulty: easy
+    max_steps: 15
+    description: >
+      300-row employee dataset. Challenges: 22% null ages, salary outliers,
+      years_at_company stored as string, 30 duplicate rows.
+    grader: deterministic pandas assertions
+    score_range: [0.0, 1.0]
+
+  - id: task_2
+    name: E-Commerce Orders Cleaning
+    difficulty: medium
+    max_steps: 18
+    description: >
+      500-row orders dataset. Challenges: 28% null quantities, 15% null ratings,
+      amount outliers, 40 duplicates, irrelevant internal_hash column to drop.
+    grader: deterministic pandas assertions
+    score_range: [0.0, 1.0]
+
+  - id: task_3
+    name: Healthcare Patient Records Cleaning
+    difficulty: hard
+    max_steps: 20
+    description: >
+      800-row healthcare dataset. Mixed per-column corruption profiles: 25% null ages,
+      physiologically impossible weight outliers, glucose stored as mixed strings/numbers
+      (type_chaos), 12% null cholesterol with outliers, 8% null systolic BP, 60 duplicates,
+      irrelevant admin_notes column. Designed to challenge GPT-4-class models.
+    grader: deterministic pandas assertions
+    score_range: [0.0, 1.0]
+
+# Reward structure
+reward:
+  step_penalty: -0.01
+  fill_nulls: "+0.10 per column (scaled by remaining null rate)"
+  remove_duplicates: "+0.12"
+  fix_dtype: "+0.10"
+  clip_outliers: "+0.08 (scaled by std reduction)"
+  rename_column: "+0.05 canonical / +0.025 non-canonical"
+  drop_column: "+0.04 irrelevant / -0.025 relevant"
+  done_bonus: "+0.15 if quality >= 0.80, else +0.15 * quality"
+  provenance_bonus: "+0.05 if ops log is fully reproducible"
+  confidence_bonus: "+0.04 for high-confidence (>=0.75) correct action"
+  confidence_penalty: "-0.06 for high-confidence wrong action"
+
+# Baseline scores (heuristic agent, seed=42)
+baseline_scores:
+  agent: heuristic (no LLM)
+  seed: 42
+  task_1:
+    final_score: 0.9167
+    total_reward: 0.47
+    steps_used: 3
+  task_2:
+    final_score: 0.95
+    total_reward: 0.79
+    steps_used: 5
+  task_3:
+    final_score: 0.95
+    total_reward: 0.99
+    steps_used: 7
+
+# Runtime
+runtime:
+  sdk: docker
+  python: "3.11"
+  port: 7860
+  web_ui: /web
+  concurrent_sessions: true
+  max_sessions: 50
