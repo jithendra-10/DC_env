@@ -15,6 +15,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY dataclean/ ./dataclean/
 COPY baseline/  ./baseline/
 COPY server.py  .
+COPY inference.py .
+COPY openenv.yaml .
+COPY training_script.py .
 
 # HuggingFace Spaces requires port 7860
 EXPOSE 7860
@@ -23,7 +26,12 @@ EXPOSE 7860
 RUN useradd -m -u 1000 appuser && chown -R appuser /app
 USER appuser
 
-# Gradio UI enabled by default — judges can demo at /web
+# Required inference env variables (set these in HF Space secrets)
+ENV API_BASE_URL=https://router.huggingface.co/v1
+ENV MODEL_NAME=meta-llama/Meta-Llama-3-70B-Instruct
+ENV HF_TOKEN=""
+
+# Server env
 ENV ENABLE_WEB_INTERFACE=true
 ENV PORT=7860
 

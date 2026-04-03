@@ -186,3 +186,14 @@ runtime:
   web_ui: /web
   concurrent_sessions: true
   max_sessions: 50
+
+# Open-source model support
+open_source_baseline:
+  model: meta-llama/Meta-Llama-3-70B-Instruct
+  provider: HuggingFace Inference API
+  script: baseline/llama_agent.py
+  token_env_var: HF_TOKEN
+  note: >
+    Demonstrates model-agnostic design. Uses Meta's Llama-3-70B-Instruct
+    via HuggingFace Inference API — directly leveraging both hackathon
+    co-organisers' infrastructure.

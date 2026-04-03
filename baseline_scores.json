@@ -1,0 +1,56 @@
+{
+  "model": "meta-llama/Meta-Llama-3-70B-Instruct",
+  "api_base_url": "https://router.huggingface.co/v1",
+  "seed": 42,
+  "total_runtime_s": 1.1,
+  "results": [
+    {
+      "task_id": "task_1",
+      "seed": 42,
+      "model": "meta-llama/Meta-Llama-3-70B-Instruct",
+      "final_score": 0.6348,
+      "total_reward": 0.1352,
+      "quality_scores": {
+        "null_score": 0.9439,
+        "type_score": 0.6667,
+        "outlier_score": 0.9788,
+        "dup_score": 0.9091,
+        "overall": 0.8746
+      },
+      "provenance_ok": true,
+      "steps_used": 1
+    },
+    {
+      "task_id": "task_2",
+      "seed": 42,
+      "model": "meta-llama/Meta-Llama-3-70B-Instruct",
+      "final_score": 0.4045,
+      "total_reward": 0.1007,
+      "quality_scores": {
+        "null_score": 0.9392,
+        "type_score": 1.0,
+        "outlier_score": 0.9648,
+        "dup_score": 0.9259,
+        "overall": 0.9575
+      },
+      "provenance_ok": true,
+      "steps_used": 1
+    },
+    {
+      "task_id": "task_3",
+      "seed": 42,
+      "model": "meta-llama/Meta-Llama-3-70B-Instruct",
+      "final_score": 0.6142,
+      "total_reward": 0.1321,
+      "quality_scores": {
+        "null_score": 0.9556,
+        "type_score": 0.8333,
+        "outlier_score": 0.9817,
+        "dup_score": 0.9302,
+        "overall": 0.9252
+      },
+      "provenance_ok": true,
+      "steps_used": 1
+    }
+  ]
+}

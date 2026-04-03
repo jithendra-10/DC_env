@@ -73,20 +73,38 @@ class DataCleanEnv:
 
     # ── Public API ───────────────────────────────────────────────────────────
 
-    def reset(self, task_id: str, seed: int = 42) -> Observation:
+    def reset(self, task_id: str, seed: int = 42, custom_df: pd.DataFrame | None = None) -> Observation:
         """Start a new episode. Returns the first observation."""
-        if task_id not in TASK_REGISTRY:
-            raise ValueError(f"Unknown task_id '{task_id}'. Available: {list(TASK_REGISTRY)}")
-
-        self._task = TASK_REGISTRY[task_id]
         rng = np.random.default_rng(seed)
 
-        self._df = self._task.generate(rng)
+        if custom_df is not None:
+            # --- Dynamic Sandbox Task ---
+            class CustomTask(Task):
+                def __init__(self):
+                    self.description = "Dynamic user uploaded sandbox dataset."
+                    self.max_steps = 30
+                    self.canonical_column_names = {}
+                    self.irrelevant_columns = []
+                def generate(self, r): return custom_df.copy(deep=True)
+                def grade(self, df):
+                    # We grade custom CSVs dynamically based entirely on data-type math!
+                    null_score = float(1 - df.isna().mean().mean())
+                    dup_score  = float(1 - df.duplicated().mean())
+                    overall = np.mean([null_score, dup_score])
+                    return float(round(overall, 4))
+            self._task = CustomTask()
+            self._df = self._task.generate(rng)
+        else:
+            if task_id not in TASK_REGISTRY:
+                raise ValueError(f"Unknown task_id '{task_id}'. Available: {list(TASK_REGISTRY)}")
+            self._task = TASK_REGISTRY[task_id]
+            self._df = self._task.generate(rng)
+
         self._raw_df = self._df.copy(deep=True)   # immutable snapshot
         self._ops_log = []
 
         self._state = EpisodeState(
-            task_id=task_id,
+            task_id="custom_upload" if custom_df is not None else task_id,
             episode_id=str(uuid.uuid4()),
             seed=seed,
             step=0,

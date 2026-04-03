@@ -25,6 +25,8 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
+import pandas as pd
+from openai import OpenAI
 
 from dataclean.env import DataCleanEnv
 from dataclean.models import DataCleanAction, Observation, StepResult
@@ -439,44 +441,218 @@ def _build_gradio_app():
         return json.dumps({"score": score, "provenance": prov, "breakdown": qs}, indent=2)
 
     with gr.Blocks(title="DataClean-Env", theme=gr.themes.Soft()) as demo:
-        gr.Markdown("# 🧹 DataClean-Env\nInteractive RL environment for data cleaning agents.")
+        gr.Markdown(
+            "# 🧹 DataClean-Env — Interactive RL Sandbox\n\n"
+            "**The Goal:** You (or the AI) are a Data Engineer. Clean a deeply corrupted pandas DataFrame using strict mathematical actions to achieve a `1.000` Quality Score.\n\n"
+            "**Game Flow:** `Reset Episode` → `Analyze Column Profiles` → `Select Operation (e.g., fill_nulls)` → `Submit Step` → `Receive Reward + Next State` → `Call Done`\n\n"
+            "*The environment tracks provenance, penalizes hallucinated columns, grades uncertainty (Confidence levels), and computes geometric dimensionality scores.*"
+        )
 
-        with gr.Row():
-            task_dd   = gr.Dropdown(["task_1", "task_2", "task_3"], value="task_1", label="Task")
-            seed_num  = gr.Number(value=42, label="Seed", precision=0)
-            reset_btn = gr.Button("▶ Reset", variant="primary")
+        with gr.Tabs():
+            with gr.Tab("Manual Inspector"):
+                with gr.Row():
+                    task_dd   = gr.Dropdown(["task_1", "task_2", "task_3"], value="task_1", label="Task")
+                    seed_num  = gr.Number(value=42, label="Seed", precision=0)
+                    reset_btn = gr.Button("▶ Reset", variant="primary")
+                    
+                with gr.Accordion("📄 Dataset Level Difficulty Guide", open=False):
+                    gr.Markdown(
+                        "**`task_1` (EASY)** — Employee Dataset (300 rows). Features single-column imputation and basic dtype fixes. 22% null ages, 30 duplicate rows.\n\n"
+                        "**`task_2` (MEDIUM)** — E-commerce Orders (500 rows). Multi-column corruption strings. 28% nulls, heavy financial outliers, irrelevant columns to drop.\n\n"
+                        "**`task_3` (HARD)** — Clinical Healthcare Records (800 rows). Mixed corruption profiles per column. Physiologically impossible biological outliers + severe type chaos. Designed to test GPT-4 level agents."
+                    )
 
-        obs_box    = gr.Textbox(label="Observation", lines=20, max_lines=30)
-        status_box = gr.Textbox(label="Last action result")
+                obs_box    = gr.Textbox(label="Observation", lines=15, max_lines=25)
+                status_box = gr.Textbox(label="Last action result")
 
-        gr.Markdown("### Take an action")
-        with gr.Row():
-            action_dd = gr.Dropdown(
-                ["fill_nulls", "remove_duplicates", "fix_dtype",
-                 "clip_outliers", "rename_column", "drop_column", "done"],
-                value="remove_duplicates", label="Action type"
-            )
-            col_txt    = gr.Textbox(label="Column (leave blank if N/A)")
-            conf_sl    = gr.Slider(0.0, 1.0, value=0.8, step=0.05, label="Confidence")
+                with gr.Row():
+                    with gr.Column(scale=2):
+                        gr.Markdown("### ⚡ Execute Action")
+                        with gr.Row():
+                            action_dd = gr.Dropdown(
+                                ["fill_nulls", "remove_duplicates", "fix_dtype",
+                                 "clip_outliers", "rename_column", "drop_column", "done"],
+                                value="remove_duplicates", label="Action type"
+                            )
+                            col_txt    = gr.Textbox(label="Column (leave blank if N/A)")
+                            conf_sl    = gr.Slider(0.0, 1.0, value=0.8, step=0.05, label="Confidence")
 
-        with gr.Row():
-            strategy_dd  = gr.Dropdown(["mean", "median", "mode", "constant", "ffill"],
-                                        value="median", label="fill_nulls strategy")
-            dtype_dd     = gr.Dropdown(["float64", "int64", "str", "datetime64", "bool"],
-                                        value="float64", label="fix_dtype target")
-            clip_dd      = gr.Dropdown(["iqr", "zscore", "percentile"],
-                                        value="iqr", label="clip_outliers method")
+                        with gr.Row():
+                            strategy_dd  = gr.Dropdown(["mean", "median", "mode", "constant", "ffill"],
+                                                        value="median", label="fill_nulls strategy")
+                            dtype_dd     = gr.Dropdown(["float64", "int64", "str", "datetime64", "bool"],
+                                                        value="float64", label="fix_dtype target")
+                            clip_dd      = gr.Dropdown(["iqr", "zscore", "percentile"],
+                                                        value="iqr", label="clip_outliers method")
 
-        step_btn   = gr.Button("⚡ Step", variant="primary")
-        reward_box = gr.Textbox(label="Reward breakdown (JSON)")
-        grade_btn  = gr.Button("📊 Grade current state")
-        grade_box  = gr.Textbox(label="Grade result")
+                        with gr.Row():
+                            step_btn   = gr.Button("⚡ Step", variant="primary")
+                            grade_btn  = gr.Button("📊 Grade current state")
+
+                        reward_box = gr.Textbox(label="Reward breakdown (JSON)")
+                        grade_box  = gr.Textbox(label="Grade result")
+                    with gr.Column(scale=1):
+                        gr.Markdown(
+                            "### 🛠 Tools Reference\n"
+                            "**`fill_nulls`** — Fill missing values.\n\n"
+                            "- **column** *(required)*\n"
+                            "- **strategy** *(mean, median, mode, constant, ffill)*\n\n"
+                            "**`remove_duplicates`** — Drop identical rows.\n\n"
+                            "**`fix_dtype`** — Cast a column to a new type.\n\n"
+                            "- **column** *(required)*\n"
+                            "- **target_dtype** *(int64, float64, str, datetime64, bool)*\n\n"
+                            "**`clip_outliers`** — Cap extreme values.\n\n"
+                            "- **column** *(required)*\n"
+                            "- **method** *(iqr, zscore, percentile)*\n\n"
+                            "**`rename_column` / `drop_column`**\n\n"
+                            "- **column** *(required)*\n\n"
+                            "> **Note:** High confidence (≥0.75) yields a `+0.04` bonus on correct moves, but penalizes `-0.06` if wrong!"
+                        )
+
+            with gr.Tab("Agent Copilot (Sandbox)"):
+                gr.Markdown(
+                    "### 🤖 Autonomous Copilot Arena\n"
+                    "Instead of clicking manually, **watch an autonomous LLM clean the dataset by itself!** \n\n"
+                    "**Flow:** `Upload Custom CSV` → `Enter HF Token` → `Hit Start` → `Watch the AI and Environment talk to each other in real-time.`"
+                )
+                with gr.Row():
+                    with gr.Column(scale=2):
+                        with gr.Row():
+                            copilot_model_dd = gr.Dropdown(
+                                ["meta-llama/Meta-Llama-3-70B-Instruct", "Qwen/Qwen2.5-72B-Instruct", "mistralai/Mixtral-8x7B-Instruct-v0.1"],
+                                value="meta-llama/Meta-Llama-3-70B-Instruct", label="Inference Model (via HF Router)", allow_custom_value=True
+                            )
+                            copilot_token_txt = gr.Textbox(label="HuggingFace Token (Read)", type="password")
+                        with gr.Row():
+                            copilot_task_dd = gr.Dropdown(["task_1", "task_2", "task_3"], value="task_1", label="Or Select Base Task")
+                            copilot_file = gr.File(label="Upload Custom CSV (Sandbox Mode)", file_types=[".csv"])
+                        
+                        with gr.Accordion("📄 Dataset Level Difficulty Guide", open=False):
+                            gr.Markdown(
+                                "**`task_1` (EASY)** — Employee Dataset (300 rows). Features single-column imputation and basic dtype fixes. 22% null ages, 30 duplicate rows.\n\n"
+                                "**`task_2` (MEDIUM)** — E-commerce Orders (500 rows). Multi-column corruption strings. 28% nulls, heavy financial outliers, irrelevant columns to drop.\n\n"
+                                "**`task_3` (HARD)** — Clinical Healthcare Records (800 rows). Mixed corruption profiles per column. Physiologically impossible biological outliers + severe type chaos. Designed to test GPT-4 level agents."
+                            )
+                        
+                        with gr.Row():
+                            start_copilot_btn = gr.Button("🤖 Start Autonomous Agent", variant="primary")
+                            stop_copilot_btn = gr.Button("🛑 Stop", variant="stop")
+
+                        copilot_chatbot = gr.Chatbot(label="Autonomous Agent Live Feed", height=500)
+                    with gr.Column(scale=1):
+                        gr.Markdown(
+                            "### 🛠 Agent Actions Dictionary\n\n"
+                            "Our RL Environment exposes a strict API toolset to the LLM. It can select any of the following actions via JSON:\n\n"
+                            "**`fill_nulls`** — Requires `column` array and `strategy` (mean, median, ffill, etc.)\n\n"
+                            "**`remove_duplicates`** — Drops identical dataset rows.\n\n"
+                            "**`fix_dtype`** — Coerces columns into target types like `int64` or `datetime64`.\n\n"
+                            "**`clip_outliers`** — Truncates statistical outliers using IQR or Z-score bounds.\n\n"
+                            "**`rename_column`** / **`drop_column`** — Resolves structure.\n\n"
+                            "**`done`** — Terminal signal when the agent believes overall quality exceeds 0.90.\n\n"
+                            "![Confidence Model](https://img.shields.io/badge/Confidence-Evaluated-blue)\n"
+                            "*The agent must declare statistical confidence on every move. This proves calibration capabilities and mitigates hallucinations.*"
+                        )
 
         reset_btn.click(ui_reset, [task_dd, seed_num], [obs_box, status_box, reward_box])
         step_btn.click(ui_step,
                        [action_dd, col_txt, strategy_dd, dtype_dd, clip_dd, conf_sl],
                        [obs_box, status_box, reward_box])
         grade_btn.click(ui_grade, [], [grade_box])
+
+        # Copilot Logic
+        def run_copilot(model_id, hf_token, task_id, upload_file, history):
+            import time
+            from inference import parse_action, obs_to_prompt, SYSTEM_PROMPT
+            
+            if not hf_token:
+                history.append(("Start Command", "ERROR: Please provide a HuggingFace Token."))
+                yield history
+                return
+            
+            client = OpenAI(base_url="https://router.huggingface.co/v1", api_key=hf_token)
+            
+            try:
+                if upload_file is not None:
+                    # Sandbox Mode
+                    df = pd.read_csv(upload_file.name)
+                    obs = _ui_env.reset("custom", custom_df=df)
+                    history.append((f"Uploaded CSV ({len(df)} rows).", f"Initialized dynamic Sandbox Task. Env ready. Quality: {obs.quality_scores['overall']:.3f}"))
+                else:
+                    obs = _ui_env.reset(task_id)
+                    history.append((f"Selected {task_id}.", f"Initialized Base Task. Env ready. Quality: {obs.quality_scores['overall']:.3f}"))
+            except Exception as e:
+                history.append(("Reset error", str(e)))
+                yield history
+                return
+
+            yield history
+            
+            last_action_result = "Inspect columns and begin."
+            step_rewards = []
+            
+            for step in range(1, 21):
+                if _ui_env._state.done:
+                    break
+                    
+                prompt = obs_to_prompt(obs)
+                
+                # Yield thinking state
+                history.append((None, "Agent is thinking..."))
+                yield history
+                
+                try:
+                    completion = client.chat.completions.create(
+                        model=model_id,
+                        messages=[
+                            {"role": "system", "content": SYSTEM_PROMPT},
+                            {"role": "user", "content": prompt},
+                        ],
+                        temperature=0.1,
+                        stream=False
+                    )
+                    raw_reply = completion.choices[0].message.content or ""
+                    
+                except Exception as exc:
+                    history[-1] = (None, f"API Error: {exc}. Aborting.")
+                    yield history
+                    break
+                
+                history[-1] = (None, f"LLM Action Selected:\n```json\n{raw_reply}\n```")
+                yield history
+                
+                action_dict = parse_action(raw_reply)
+                try:
+                    action = DataCleanAction(
+                        action_type=action_dict.get("action_type", "done"),
+                        column=action_dict.get("column"),
+                        params=action_dict.get("params", {}),
+                        confidence=action_dict.get("confidence", 0.8),
+                    )
+                    result = _ui_env.step(action)
+                    obs = result.observation
+                    last_action_result = obs.last_action_result
+                    reward = result.reward
+                except Exception as exc:
+                    last_action_result = f"Error: {exc}"
+                    reward = -0.05
+                
+                # Show Environment response
+                history.append((f"Action executed.", f"Environment: {last_action_result}\nReward earned: {reward:+.3f}\nCurrent Quality: {obs.quality_scores['overall']:.3f}"))
+                yield history
+
+            final_score = _ui_env.grade()
+            history.append(("Episode Finished", f"Final Score: {final_score:.3f}. Agent operations complete."))
+            yield history
+
+        start_copilot_btn.click(
+            run_copilot, 
+            inputs=[copilot_model_dd, copilot_token_txt, copilot_task_dd, copilot_file, copilot_chatbot], 
+            outputs=[copilot_chatbot]
+        )
+        
+        # Clear chatbot when switching tasks/files
+        copilot_file.change(lambda: [], outputs=[copilot_chatbot])
+        copilot_task_dd.change(lambda: [], outputs=[copilot_chatbot])
 
     return demo
 
