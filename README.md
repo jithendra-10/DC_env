@@ -263,4 +263,4 @@ DataClean-Env features a professional Gradio interface with two distinct modes:
 
 ## License
 
-MIT License. Built for AiGenX Hackathon 2026 — OpenEnv Round 1.
+MIT License. Built for the Meta-Scalar OpenEnv Hackathon.
