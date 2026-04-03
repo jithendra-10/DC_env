@@ -23,7 +23,7 @@ from typing import Any
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 from pydantic import BaseModel
 import pandas as pd
 from openai import OpenAI
@@ -104,6 +104,14 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# ── 0. Cache Breaker ────────────────────────────────────────────────────────────
+
+@app.get("/web", tags=["meta"], include_in_schema=False)
+def redirect_to_root():
+    """Flush cached redirects for old users by pointing them back to the root."""
+    return RedirectResponse(url="/")
 
 
 # ── 1. GET /health ────────────────────────────────────────────────────────────
@@ -380,10 +388,7 @@ def _heuristic_action(obs: Observation) -> DataCleanAction:
 
 def _build_gradio_app():
     """Build the Gradio interactive demo UI."""
-    try:
-        import gradio as gr
-    except ImportError:
-        return None
+    import gradio as gr
 
     _ui_env = DataCleanEnv()
     _ui_state: dict[str, Any] = {"episode_id": None, "obs": None}
@@ -443,12 +448,40 @@ def _build_gradio_app():
     with gr.Blocks(title="DataClean-Env", theme=gr.themes.Soft()) as demo:
         gr.Markdown(
             "# 🧹 DataClean-Env — Interactive RL Sandbox\n\n"
-            "**The Goal:** You (or the AI) are a Data Engineer. Clean a deeply corrupted pandas DataFrame using strict mathematical actions to achieve a `1.000` Quality Score.\n\n"
-            "**Game Flow:** `Reset Episode` → `Analyze Column Profiles` → `Select Operation (e.g., fill_nulls)` → `Submit Step` → `Receive Reward + Next State` → `Call Done`\n\n"
-            "*The environment tracks provenance, penalizes hallucinated columns, grades uncertainty (Confidence levels), and computes geometric dimensionality scores.*"
+            "**The Goal:** You (or the AI) are a Data Engineer. Clean deeply corrupted real-world datasets using strict mathematical actions to achieve a perfect `1.000` Quality Score.\n\n"
+            "*The environment tracks provenance, penalizes hallucinated features, grades uncertainty, and scores overall architectural integrity.*"
         )
 
-        with gr.Tabs():
+        with gr.Row():
+            # LEFT SIDEBAR: Professional Context
+            with gr.Column(scale=1, variant="panel"):
+                gr.Markdown(
+                    "### 🌟 Environment Context\n\n"
+                    "DataClean-Env is the first rigorous framework for testing LLM agents on data engineering tasks.\n\n"
+                    "---\n\n"
+                    "### 📊 The Tasks\n"
+                    "We expose 3 levels of difficulty:\n"
+                    "- 🟢 **Easy (Employee Data):** Basic imputation & single-column formatting.\n"
+                    "- 🟡 **Medium (E-Commerce):** Multi-column corruption & heavy outliers.\n"
+                    "- 🔴 **Hard (Healthcare):** Physiologically impossible bounds & severe type chaos.\n\n"
+                    "---\n\n"
+                    "### 🛠 The Actions\n"
+                    "Agents must sequence operations exactly as a human would:\n"
+                    "1. 🔍 **Diagnose:** Analyze column schemas & null rates\n"
+                    "2. 🔄 **Standardize:** Coerce types (`fix_dtype`)\n"
+                    "3. 🪄 **Impute:** Fill gaps intelligently (`fill_nulls`)\n"
+                    "4. ✂️ **Prune:** Remove anomalies (`clip_outliers`, `remove_duplicates`)\n\n"
+                    "---\n\n"
+                    "### ⚖️ Grading System\n"
+                    "Every move is graded automatically:\n"
+                    "- 📈 **Reward:** +0.10 for perfect type casting\n"
+                    "- 📉 **Penalty:** -0.05 for operating on clean data\n"
+                    "- 🎯 **Confidence:** Proper calibration yields bonus points!\n"
+                )
+
+            # RIGHT SIDEBAR: The App
+            with gr.Column(scale=3):
+                with gr.Tabs():
             with gr.Tab("Manual Inspector"):
                 with gr.Row():
                     task_dd   = gr.Dropdown(["task_1", "task_2", "task_3"], value="task_1", label="Task")
@@ -664,10 +697,12 @@ if os.environ.get("ENABLE_WEB_INTERFACE", "true").lower() == "true":
         from gradio.routes import mount_gradio_app
         demo = _build_gradio_app()
         if demo:
-            app = mount_gradio_app(app, demo, path="/web")
-            print("Gradio UI mounted at /web")
-    except ImportError:
-        print("Gradio not installed — skipping web UI. Run: pip install gradio")
+            app = mount_gradio_app(app, demo, path="/")
+            print("Gradio UI mounted at /")
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        print(f"Gradio not installed — skipping web UI. Error: {e}. Run: pip install gradio")
 
 
 # ── Entrypoint ────────────────────────────────────────────────────────────────
