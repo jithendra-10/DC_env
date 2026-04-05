@@ -41,7 +41,10 @@ def log_end(success: bool, steps: int, score: float, rewards: list[float]) -> No
 
 API_BASE_URL = os.getenv("API_BASE_URL", "https://router.huggingface.co/v1")
 MODEL_NAME   = os.getenv("MODEL_NAME",   "meta-llama/Meta-Llama-3-70B-Instruct")
-HF_TOKEN     = os.getenv("HF_TOKEN") or os.getenv("API_KEY", "")
+HF_TOKEN     = os.getenv("HF_TOKEN")
+
+# Optional — if you use from_docker_image():
+LOCAL_IMAGE_NAME = os.getenv("LOCAL_IMAGE_NAME")
 
 if not HF_TOKEN:
     print("ERROR: HF_TOKEN environment variable not set.")
