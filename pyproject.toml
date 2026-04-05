@@ -13,5 +13,9 @@ dependencies = [
     "numpy",
     "openai",
     "gradio",
-    "huggingface-hub<0.23.0"
+    "huggingface-hub<0.23.0",
+    "openenv-core>=0.2.0"
 ]
+
+[project.scripts]
+server = "server:app"
