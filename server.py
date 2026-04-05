@@ -19,7 +19,7 @@ import uuid
 import json
 import asyncio
 from contextlib import asynccontextmanager
-from typing import Any
+from typing import Any, Optional
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -125,11 +125,15 @@ def health():
 # ── 2. POST /reset ────────────────────────────────────────────────────────────
 
 @app.post("/reset", tags=["openenv"], response_model=dict)
-def reset(req: ResetRequest):
+def reset(req: Optional[ResetRequest] = None):
     """
     Start a new episode. Returns the initial Observation plus the episode_id
     you must pass to /step and /grader.
+    Body is optional — defaults to task_id='task_1', seed=42.
     """
+    if req is None:
+        req = ResetRequest()
+
     if req.task_id not in TASK_REGISTRY:
         raise HTTPException(
             status_code=400,
