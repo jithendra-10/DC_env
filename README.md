@@ -257,7 +257,7 @@ DataClean-Env features a professional Gradio interface with two distinct modes:
 1. Create Space → SDK: **Docker**, tag: `openenv`
 2. Push all repo files
 3. Add Space secrets: `HF_TOKEN`, `API_BASE_URL`, `MODEL_NAME`
-4. Run: `openenv validate --url https://huggingface.co/spaces/YOUR_USERNAME/dataclean-env`
+4. Run: `openenv validate --url  https://huggingface.co/spaces/Jxth/dataclean-env`
 
 ---
 
